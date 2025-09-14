@@ -26,21 +26,51 @@ export const useAuth = () => {
 
   useEffect(() => {
     let mounted = true
+    let timeoutId: NodeJS.Timeout
 
-    // 초기 세션 확인
+    // 초기 세션 확인 - 타임아웃 추가
     const checkSession = async (): Promise<void> => {
       try {
-        const user = await getCurrentUser()
+        // 로딩 상태 최대 시간 설정 (10초)
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.warn('Auth session check timeout - falling back to non-authenticated state')
+            setState({
+              user: null,
+              profile: null,
+              loading: false,
+              error: null
+            })
+          }
+        }, 10000)
+
+        const { data: { session }, error } = await supabase.auth.getSession()
         
-        if (user && mounted) {
-          const profile = await getUserProfile(user.id)
+        if (error) {
+          throw error
+        }
+
+        if (session?.user && mounted) {
+          clearTimeout(timeoutId)
+          let profile = await getUserProfile(session.user.id)
+          
+          // 프로필이 없으면 생성
+          if (!profile) {
+            profile = await createUserProfile(
+              session.user.id,
+              session.user.email || '',
+              session.user.user_metadata?.username
+            )
+          }
+
           setState({
-            user,
+            user: session.user,
             profile,
             loading: false,
             error: null
           })
         } else if (mounted) {
+          clearTimeout(timeoutId)
           setState({
             user: null,
             profile: null,
@@ -50,6 +80,8 @@ export const useAuth = () => {
         }
       } catch (error) {
         if (mounted) {
+          clearTimeout(timeoutId)
+          console.error('Auth session check error:', error)
           setState({
             user: null,
             profile: null,
@@ -62,11 +94,13 @@ export const useAuth = () => {
 
     // 인증 상태 변화 리스너
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_, session) => {
+      async (event, session) => {
         if (!mounted) return
 
-        if (session?.user) {
-          try {
+        console.log('Auth state changed:', event, session?.user?.email)
+
+        try {
+          if (session?.user) {
             let profile = await getUserProfile(session.user.id)
             
             // 프로필이 없으면 생성
@@ -84,20 +118,21 @@ export const useAuth = () => {
               loading: false,
               error: null
             })
-          } catch (error) {
+          } else {
             setState({
-              user: session.user,
+              user: null,
               profile: null,
               loading: false,
-              error: error instanceof Error ? error.message : '프로필 로드 실패'
+              error: null
             })
           }
-        } else {
+        } catch (error) {
+          console.error('Auth state change error:', error)
           setState({
-            user: null,
+            user: session?.user || null,
             profile: null,
             loading: false,
-            error: null
+            error: error instanceof Error ? error.message : '프로필 로드 실패'
           })
         }
       }
@@ -107,6 +142,9 @@ export const useAuth = () => {
 
     return () => {
       mounted = false
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
       subscription.unsubscribe()
     }
   }, [])
@@ -159,7 +197,6 @@ export const useAuth = () => {
 
       if (error) throw error
 
-      setState(prev => ({ ...prev, loading: false }))
       return { success: true, message: '로그인 성공!' }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '로그인 중 오류가 발생했습니다.'
@@ -176,7 +213,6 @@ export const useAuth = () => {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
 
-      setState(prev => ({ ...prev, loading: false }))
       return { success: true, message: '로그아웃되었습니다.' }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '로그아웃 중 오류가 발생했습니다.'
