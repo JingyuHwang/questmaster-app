@@ -1,0 +1,231 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* 기본 스타일 */
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  min-height: 100vh;
+}
+
+.dark body {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+/* 게임 카드 스타일 */
+.game-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.dark .game-card {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.game-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+}
+
+/* 게임 버튼 */
+.game-button {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.game-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* 능력치별 색상 */
+.text-intelligence { color: #3b82f6; }
+.text-strength { color: #ef4444; }
+.text-health { color: #22c55e; }
+.text-creativity { color: #a855f7; }
+.text-social { color: #eab308; }
+
+.bg-intelligence { background-color: #3b82f6; }
+.bg-strength { background-color: #ef4444; }
+.bg-health { background-color: #22c55e; }
+.bg-creativity { background-color: #a855f7; }
+.bg-social { background-color: #eab308; }
+
+/* 진행도 바 */
+.progress-bar {
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 20px;
+}
+
+.dark .progress-bar {
+  background: #475569;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+  transition: width 0.5s ease;
+}
+
+.progress-fill-intelligence {
+  background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%);
+}
+
+.progress-fill-strength {
+  background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
+}
+
+.progress-fill-health {
+  background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+}
+
+.progress-fill-creativity {
+  background: linear-gradient(90deg, #c084fc 0%, #a855f7 100%);
+}
+
+.progress-fill-social {
+  background: linear-gradient(90deg, #fde047 0%, #eab308 100%);
+}
+
+/* 퀘스트 카드 */
+.quest-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 20px;
+  border-left: 4px solid #3b82f6;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.dark .quest-card {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.quest-card:hover {
+  transform: scale(1.02);
+}
+
+.quest-easy {
+  border-left-color: #22c55e;
+}
+
+.quest-medium {
+  border-left-color: #eab308;
+}
+
+.quest-hard {
+  border-left-color: #ef4444;
+}
+
+/* 습관 카드 */
+.habit-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 16px;
+  border-left: 4px solid #3b82f6;
+  transition: all 0.3s ease;
+}
+
+.dark .habit-card {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.habit-card-intelligence {
+  border-left-color: #3b82f6;
+}
+
+.habit-card-strength {
+  border-left-color: #ef4444;
+}
+
+.habit-card-health {
+  border-left-color: #22c55e;
+}
+
+.habit-card-creativity {
+  border-left-color: #a855f7;
+}
+
+.habit-card-social {
+  border-left-color: #eab308;
+}
+
+/* 알림 */
+.notification-success {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: white;
+}
+
+.notification-error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.notification-warning {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: white;
+}
+
+.notification-info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+/* 애니메이션 */
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.animate-sparkle {
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+@keyframes level-up {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.animate-level-up {
+  animation: level-up 0.6s ease-out;
+}
+
+/* 스크롤바 숨기기 */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .game-card {
+    margin: 0 8px;
+    padding: 16px;
+  }
+  
+  .game-button {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+}
