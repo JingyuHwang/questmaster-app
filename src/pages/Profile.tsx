@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 import { AvatarCard } from '../components/avatar/AvatarCard'
 import { LoadingSpinner, PageLoadingSpinner } from '../components/ui/LoadingSpinner'
 import { useToast } from '../components/ui/ToastProvider'
@@ -9,11 +10,13 @@ import { User, Crown, Trophy, Star, Settings, Edit } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 
 const Profile: React.FC = () => {
-  const { profile, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth()
   const { showSuccess, showError } = useToast()
   const [avatars, setAvatars] = useState<Avatar[]>([])
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedUsername, setEditedUsername] = useState('')
 
   useEffect(() => {
     // 아바타 데이터 로드
@@ -21,6 +24,7 @@ const Profile: React.FC = () => {
       try {
         setAvatars(AVATARS)
         setSelectedAvatar(profile?.current_avatar_id || 'starter')
+        setEditedUsername(profile?.username || '')
       } catch (error) {
         console.error('아바타 로드 오류:', error)
         showError('오류', '아바타 정보를 불러오는데 실패했습니다.')
@@ -35,12 +39,89 @@ const Profile: React.FC = () => {
   }, [profile, authLoading, showError])
 
   const handleAvatarEquip = async (avatar: Avatar) => {
+    if (!user || !profile) {
+      showError('오류', '사용자 정보를 찾을 수 없습니다.')
+      return
+    }
+
     try {
-      // TODO: Supabase에 아바타 변경 저장
+      // 데이터베이스에 아바타 변경 저장
+      const { error } = await supabase
+        .from('users')
+        .update({ current_avatar_id: avatar.id })
+        .eq('id', user.id)
+      
+      if (error) {
+        throw error
+      }
+      
+      // 로컬 상태 업데이트
       setSelectedAvatar(avatar.id)
+      
+      // 성공 메시지
       showSuccess('아바타 변경!', `${avatar.name}으로 아바타가 변경되었습니다.`)
-    } catch (error) {
+      
+      console.log(`🎨 Avatar equipped: ${avatar.name} (${avatar.id})`)
+    } catch (error: any) {
+      console.error('아바타 변경 오류:', error)
       showError('변경 실패', '아바타 변경에 실패했습니다.')
+    }
+  }
+
+  // 프로필 편집 시작
+  const handleEditStart = () => {
+    setIsEditing(true)
+    setEditedUsername(profile?.username || '')
+  }
+
+  // 프로필 편집 취소
+  const handleEditCancel = () => {
+    setIsEditing(false)
+    setEditedUsername(profile?.username || '')
+  }
+
+  // 프로필 편집 저장
+  const handleEditSave = async () => {
+    if (!user || !profile) {
+      showError('오류', '사용자 정보를 찾을 수 없습니다.')
+      return
+    }
+
+    // 입력 검증
+    if (!editedUsername.trim()) {
+      showError('입력 오류', '사용자명을 입력해주세요.')
+      return
+    }
+
+    if (editedUsername.length > 20) {
+      showError('입력 오류', '사용자명은 20자 이하로 입력해주세요.')
+      return
+    }
+
+    try {
+      // 데이터베이스에 사용자명 업데이트
+      const { error } = await supabase
+        .from('users')
+        .update({ username: editedUsername.trim() })
+        .eq('id', user.id)
+      
+      if (error) {
+        throw error
+      }
+      
+      // 성공 시 편집 모드 종료
+      setIsEditing(false)
+      
+      // 성공 메시지
+      showSuccess('프로필 업데이트!', '사용자명이 성공적으로 변경되었습니다.')
+      
+      // 프로필 데이터 새로고침
+      await refreshProfile()
+      
+      console.log(`👤 Username updated: ${editedUsername}`)
+    } catch (error: any) {
+      console.error('프로필 업데이트 오류:', error)
+      showError('업데이트 실패', '프로필 업데이트에 실패했습니다.')
     }
   }
 
@@ -124,30 +205,72 @@ const Profile: React.FC = () => {
           {/* 프로필 정보 */}
           <div className="flex-1 space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                  {profile.username || '익명의 퀘스터'}
-                </h1>
-                <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                  <div className="flex items-center space-x-1">
-                    <Crown size={16} className="text-yellow-500" />
-                    <span>Level {profile.level}</span>
+              <div className="flex-1">
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={editedUsername}
+                      onChange={(e) => setEditedUsername(e.target.value)}
+                      placeholder="사용자명 입력"
+                      className="w-full max-w-xs px-3 py-2 text-xl font-bold bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-gray-100"
+                      maxLength={20}
+                      autoFocus
+                    />
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        onClick={handleEditSave}
+                        variant="primary"
+                        size="sm"
+                        className="px-4 py-1"
+                      >
+                        저장
+                      </Button>
+                      <Button
+                        onClick={handleEditCancel}
+                        variant="outline"
+                        size="sm"
+                        className="px-4 py-1"
+                      >
+                        취소
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <Star size={16} className="text-blue-500" />
-                    <span>{profile.total_exp.toLocaleString()} XP</span>
+                ) : (
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                    {editedUsername || profile?.username || '익명의 퀘스터'}
+                  </h1>
+                )}
+                
+                {!isEditing && (
+                  <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center space-x-1">
+                      <Crown size={16} className="text-yellow-500" />
+                      <span>Level {profile.level}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Star size={16} className="text-blue-500" />
+                      <span>{profile.total_exp.toLocaleString()} XP</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Trophy size={16} className="text-purple-500" />
+                      <span>{getAchievementLevel()}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <Trophy size={16} className="text-purple-500" />
-                    <span>{getAchievementLevel()}</span>
-                  </div>
-                </div>
+                )}
               </div>
               
-              <Button variant="outline" size="sm" className="flex items-center space-x-2">
-                <Edit size={16} />
-                <span>편집</span>
-              </Button>
+              {!isEditing && (
+                <Button 
+                  onClick={handleEditStart}
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center space-x-2"
+                >
+                  <Edit size={16} />
+                  <span>편집</span>
+                </Button>
+              )}
             </div>
 
             {/* 능력치 현황 */}
