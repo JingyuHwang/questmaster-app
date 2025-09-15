@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { Layout } from '../components/layout/Layout'
 import { useAuth } from '../hooks/useAuth'
 import { AvatarCard } from '../components/avatar/AvatarCard'
 import { LoadingSpinner, PageLoadingSpinner } from '../components/ui/LoadingSpinner'
@@ -90,27 +89,20 @@ const Profile: React.FC = () => {
   }
 
   if (authLoading || loading) {
-    return (
-      <Layout>
-        <PageLoadingSpinner label="프로필을 로딩중입니다..." />
-      </Layout>
-    )
+    return <PageLoadingSpinner label="프로필을 로딩중입니다..." />
   }
 
   if (!profile) {
     return (
-      <Layout>
-        <div className="p-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            프로필을 찾을 수 없습니다
-          </h1>
-        </div>
-      </Layout>
+      <div className="p-6 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+          프로필을 찾을 수 없습니다
+        </h1>
+      </div>
     )
   }
 
   return (
-    <Layout>
       <div className="max-w-6xl mx-auto p-6 space-y-8">
         {/* 프로필 헤더 */}
         <div className="game-card p-8">
@@ -322,7 +314,7 @@ const Profile: React.FC = () => {
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   )
 }
 

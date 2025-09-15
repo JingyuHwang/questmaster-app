@@ -133,16 +133,18 @@
 
 - ✅ 전역 알림 시스템 구현 (ToastProvider)
 - ✅ 에러 바운더리 컴포넌트 추가
+- ✅ Layout 컴포넌트 중복 문제 해결
 - ❌ API 응답 캐싱 최적화 (향후 개선)
 - ❌ 테스트 코드 작성 (Jest + React Testing Library)
 - ❌ ESLint/Prettier 설정 개선
 - ❌ CI/CD 파이프라인 구축
 
-### 📝 알려진 이슈 (해결됨)
+### 📝 알려진 이슈 
 
 1. **✅ TypeScript 컴파일 오류**: 모든 타입 오류 해결 완료
 2. **✅ 모바일 반응형**: 모든 컴포넌트 반응형 완료
 3. **✅ Supabase RLS**: 권한 에러 해결 및 테이블 생성 완료
+4. **✅ Navigation 중복 문제**: Profile.tsx, Achievements.tsx에서 Layout 중복 사용 해결
 
 ### 🎮 게임 밸런스 조정 완료
 
@@ -191,6 +193,14 @@
 - 다크모드 및 반응형 UI
 - 토스트 알림 시스템
 - 성능 최적화 완료
+
+### 🐛 **5주차 - 버그 수정 완료!** (현재)
+
+#### **🔧 Layout 중복 문제 해결**
+- ✅ Profile.tsx에서 Layout 컴포넌트 중복 사용 제거
+- ✅ Achievements.tsx에서 Layout 컴포넌트 중복 사용 제거
+- ✅ Navigation 바 이중 표시 문제 완전 해결
+- ✅ App.tsx에서 이미 Layout으로 감싸고 있는 구조 정리
 
 **🚀 배포 준비 완료!**
 QuestMaster는 이제 실제 사용자들이 사용할 수 있는 완전한 게이미피케이션 스케줄러 앱입니다!

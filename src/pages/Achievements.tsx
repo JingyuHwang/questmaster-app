@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { Layout } from '../components/layout/Layout'
 import { AchievementCard } from '../components/achievements/AchievementCard'
 import { LoadingSpinner, PageLoadingSpinner } from '../components/ui/LoadingSpinner'
 import { useAuth } from '../hooks/useAuth'
@@ -136,11 +135,7 @@ const Achievements: React.FC = () => {
   ]
 
   if (authLoading || loading) {
-    return (
-      <Layout>
-        <PageLoadingSpinner label="업적을 로딩중입니다..." />
-      </Layout>
-    )
+    return <PageLoadingSpinner label="업적을 로딩중입니다..." />
   }
 
   const { total, completed, percentage } = getCompletionStats()
@@ -148,7 +143,6 @@ const Achievements: React.FC = () => {
   const filteredAchievements = getFilteredAchievements()
 
   return (
-    <Layout>
       <div className="max-w-6xl mx-auto p-6 space-y-8">
         {/* 헤더 */}
         <div className="text-center space-y-4">
@@ -307,7 +301,7 @@ const Achievements: React.FC = () => {
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   )
 }
 
