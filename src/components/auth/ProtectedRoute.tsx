@@ -14,13 +14,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { isAuthenticated, loading } = useAuth()
   const location = useLocation()
 
-  // 로딩 중일 때는 간단한 로딩 표시
+  // 로딩 중일 때는 최소한의 로딩 표시 (무한 로딩 방지)
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
     )
   }
@@ -47,14 +45,11 @@ export const AuthRedirect: React.FC<AuthRedirectProps> = ({
   const { isAuthenticated, loading } = useAuth()
   const location = useLocation()
 
-  // 로딩 중일 때는 로딩 스피너 표시
+  // 로딩 중일 때는 간단한 로딩 표시
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-slate-600 dark:text-slate-400">QuestMaster 로딩 중...</p>
-        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
     )
   }

@@ -26,15 +26,50 @@ export const useAuth = () => {
 
   useEffect(() => {
     let mounted = true
-    let timeoutId: NodeJS.Timeout
+    let isProcessing = false
 
-    // 초기 세션 확인 - 타임아웃 추가
+    // 초기 세션 확인
     const checkSession = async (): Promise<void> => {
+      if (isProcessing) return
+      isProcessing = true
+
       try {
-        // 로딩 상태 최대 시간 설정 (10초)
-        timeoutId = setTimeout(() => {
-          if (mounted) {
-            console.warn('Auth session check timeout - falling back to non-authenticated state')
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          throw error
+        }
+
+        if (mounted) {
+          if (session?.user) {
+            try {
+              let profile = await getUserProfile(session.user.id)
+              
+              // 프로필이 없으면 생성
+              if (!profile) {
+                profile = await createUserProfile(
+                  session.user.id,
+                  session.user.email || '',
+                  session.user.user_metadata?.username
+                )
+              }
+
+              setState({
+                user: session.user,
+                profile,
+                loading: false,
+                error: null
+              })
+            } catch (profileError) {
+              console.error('Profile error:', profileError)
+              setState({
+                user: session.user,
+                profile: null,
+                loading: false,
+                error: null
+              })
+            }
+          } else {
             setState({
               user: null,
               profile: null,
@@ -42,69 +77,42 @@ export const useAuth = () => {
               error: null
             })
           }
-        }, 10000)
-
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (error) {
-          throw error
-        }
-
-        if (session?.user && mounted) {
-          clearTimeout(timeoutId)
-          let profile = await getUserProfile(session.user.id)
-          
-          // 프로필이 없으면 생성
-          if (!profile) {
-            profile = await createUserProfile(
-              session.user.id,
-              session.user.email || '',
-              session.user.user_metadata?.username
-            )
-          }
-
-          setState({
-            user: session.user,
-            profile,
-            loading: false,
-            error: null
-          })
-        } else if (mounted) {
-          clearTimeout(timeoutId)
-          setState({
-            user: null,
-            profile: null,
-            loading: false,
-            error: null
-          })
         }
       } catch (error) {
         if (mounted) {
-          clearTimeout(timeoutId)
           console.error('Auth session check error:', error)
           setState({
             user: null,
             profile: null,
             loading: false,
-            error: error instanceof Error ? error.message : '인증 확인 중 오류가 발생했습니다.'
+            error: null // 에러가 있어도 앱 실행 계속
           })
         }
+      } finally {
+        isProcessing = false
       }
     }
 
-    // 인증 상태 변화 리스너
+    // 인증 상태 변화 리스너 - 중복 처리 방지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return
+        if (!mounted || isProcessing) return
 
-        console.log('Auth state changed:', event, session?.user?.email)
+        console.log('Auth state changed:', event)
+
+        // TOKEN_REFRESHED 이벤트는 무시 (무한 루프 방지)
+        if (event === 'TOKEN_REFRESHED') {
+          return
+        }
+
+        isProcessing = true
 
         try {
           if (session?.user) {
             let profile = await getUserProfile(session.user.id)
             
-            // 프로필이 없으면 생성
-            if (!profile) {
+            // 프로필이 없으면 생성 (회원가입 시에만)
+            if (!profile && event === 'SIGNED_UP') {
               profile = await createUserProfile(
                 session.user.id,
                 session.user.email || '',
@@ -128,12 +136,13 @@ export const useAuth = () => {
           }
         } catch (error) {
           console.error('Auth state change error:', error)
-          setState({
-            user: session?.user || null,
-            profile: null,
+          setState(prev => ({
+            ...prev,
             loading: false,
-            error: error instanceof Error ? error.message : '프로필 로드 실패'
-          })
+            error: null
+          }))
+        } finally {
+          isProcessing = false
         }
       }
     )
@@ -142,9 +151,6 @@ export const useAuth = () => {
 
     return () => {
       mounted = false
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
       subscription.unsubscribe()
     }
   }, [])
@@ -190,13 +196,14 @@ export const useAuth = () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }))
       
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       })
 
       if (error) throw error
 
+      // 로그인 성공 시 loading은 onAuthStateChange에서 처리됨
       return { success: true, message: '로그인 성공!' }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '로그인 중 오류가 발생했습니다.'
