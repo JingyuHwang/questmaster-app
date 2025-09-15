@@ -45,7 +45,8 @@ export const QuestList: React.FC<QuestListProps> = ({ className }) => {
     error, 
     completeQuest, 
     deleteQuest,
-    questStats
+    questStats,
+    refreshQuests
   } = useQuests()
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -278,6 +279,10 @@ export const QuestList: React.FC<QuestListProps> = ({ className }) => {
         isOpen={isCreateModalOpen}
         onClose={() => {
           setIsCreateModalOpen(false)
+        }}
+        onQuestCreated={() => {
+          // 퀘스트 생성 후 목록 새로고침
+          refreshQuests()
         }}
       />
     </div>

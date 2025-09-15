@@ -7,19 +7,24 @@ import type { CreateQuestData } from '@/lib/types'
 interface CreateQuestModalProps {
   isOpen: boolean
   onClose: () => void
+  onQuestCreated?: () => void
 }
 
 export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  onQuestCreated
 }) => {
-  const { createQuest, loading, refreshQuests } = useQuests()
+  const { createQuest, loading } = useQuests()
 
   const handleSubmit = async (data: CreateQuestData) => {
     const result = await createQuest(data)
     
     if (result.success) {
-      // createQuest 내부에서 fetchQuests()를 이미 호출하므로 중복 호출 제거
+      // 퀘스트 생성 성공 시 부모 컴포넌트에 알림
+      if (onQuestCreated) {
+        onQuestCreated()
+      }
       onClose()
     }
     
