@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
 import type { Quest, CreateQuestData, UpdateQuestData } from '@/lib/types'
@@ -28,9 +28,16 @@ export const useQuests = () => {
     error: null
   })
 
-  // 퀘스트 목록 불러오기
-  const fetchQuests = async (): Promise<void> => {
-    if (!user) return
+  // 퀘스트 목록 불러오기 - useCallback으로 메모이제이션
+  const fetchQuests = useCallback(async (): Promise<void> => {
+    if (!user) {
+      setState({
+        quests: [],
+        loading: false,
+        error: null
+      })
+      return
+    }
 
     try {
       setState(prev => ({ ...prev, loading: true, error: null }))
@@ -56,7 +63,7 @@ export const useQuests = () => {
         loading: false
       }))
     }
-  }
+  }, [user])
 
   // 퀘스트 생성
   const createQuest = async (questData: CreateQuestData): Promise<QuestResponse> => {
@@ -65,6 +72,8 @@ export const useQuests = () => {
     }
 
     try {
+      setState(prev => ({ ...prev, error: null }))
+
       // 경험치 보상 계산
       const { expReward } = calculateQuestReward(questData.difficulty, questData.ability_type)
 
@@ -78,19 +87,35 @@ export const useQuests = () => {
         due_date: questData.due_date || null
       }
 
+      console.log('Creating quest with data:', insertData)
+
       const { data, error } = await supabase
         .from('quests')
         .insert(insertData)
         .select()
         .single() as any
 
-      if (error) throw error
+      if (error) {
+        console.error('Quest creation error:', error)
+        throw error
+      }
 
-      // 전체 목록 새로고침 (습관과 동일하게)
-      await fetchQuests()
+      console.log('Quest created successfully:', data)
+
+      // 즉시 로컬 상태 업데이트
+      setState(prev => ({
+        ...prev,
+        quests: [data, ...prev.quests]
+      }))
+
+      // 추가 보장을 위해 fetchQuests도 호출
+      setTimeout(() => {
+        fetchQuests()
+      }, 100)
 
       return { success: true, data, message: '퀘스트가 생성되었습니다!' }
     } catch (error) {
+      console.error('Create quest error:', error)
       const errorMessage = error instanceof Error ? error.message : '퀘스트 생성 중 오류가 발생했습니다.'
       setState(prev => ({ ...prev, error: errorMessage }))
       return { success: false, data: null, message: errorMessage }
@@ -117,8 +142,13 @@ export const useQuests = () => {
 
       if (error) throw error
 
-      // 전체 목록 새로고침
-      await fetchQuests()
+      // 로컬 상태 즉시 업데이트
+      setState(prev => ({
+        ...prev,
+        quests: prev.quests.map(quest => 
+          quest.id === questId ? { ...quest, ...data } : quest
+        )
+      }))
 
       return { success: true, data, message: '퀘스트가 업데이트되었습니다!' }
     } catch (error) {
@@ -184,16 +214,20 @@ export const useQuests = () => {
 
       if (userError) throw userError
 
-      // 전체 목록 새로고침
-      await fetchQuests()
+      // 로컬 상태 즉시 업데이트
+      setState(prev => ({
+        ...prev,
+        quests: prev.quests.map(q => 
+          q.id === questId 
+            ? { ...q, status: 'completed' as const, completed_at: new Date().toISOString() }
+            : q
+        )
+      }))
 
       // 사용자 프로필 새로고침
       if (refreshProfile) {
         await refreshProfile()
       }
-
-      // 업적 체크 (별도의 이벤트로 처리 - UI에서 처리)
-      // checkAllAchievements() 는 대시보드나 다른 컴포넌트에서 호출
 
       const successMessage = levelUpInfo.leveledUp 
         ? `🎉 퀘스트 완료! ${expReward} XP 획득하고 레벨 ${levelUpInfo.newLevel}로 레벨업했습니다!`
@@ -229,8 +263,11 @@ export const useQuests = () => {
 
       if (error) throw error
 
-      // 전체 목록 새로고침
-      await fetchQuests()
+      // 로컬 상태 즉시 업데이트
+      setState(prev => ({
+        ...prev,
+        quests: prev.quests.filter(quest => quest.id !== questId)
+      }))
 
       return { success: true, message: '퀘스트가 삭제되었습니다.' }
     } catch (error) {
@@ -242,56 +279,39 @@ export const useQuests = () => {
 
   // 사용자 변경 시 퀘스트 다시 불러오기
   useEffect(() => {
-    if (user) {
-      fetchQuests()
-      
-      // 실시간 구독 설정
-      const subscription = supabase
-        .channel('quests-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'quests',
-            filter: `user_id=eq.${user.id}`,
-          },
-          (payload) => {
-            console.log('Quest 실시간 업데이트:', payload)
-            console.log('이벤트 타입:', payload.eventType)
-            console.log('새 데이터:', payload.new)
-            console.log('이전 데이터:', payload.old)
-            
-            // 모든 변경사항에 대해 목록 새로고침
-            // INSERT, UPDATE, DELETE 모두 처리
-            if (payload.eventType === 'INSERT') {
-              console.log('새 퀘스트 생성 감지 - 목록 새로고침')
-              fetchQuests()
-            } else if (payload.eventType === 'UPDATE') {
-              console.log('퀘스트 업데이트 감지 - 목록 새로고침')
-              fetchQuests()
-            } else if (payload.eventType === 'DELETE') {
-              console.log('퀘스트 삭제 감지 - 목록 새로고침')
-              fetchQuests()
-            }
-          }
-        )
-        .subscribe()
+    fetchQuests()
+  }, [fetchQuests])
 
-      // 클린업 함수
-      return () => {
-        subscription.unsubscribe()
-      }
-    } else {
-      setState({
-        quests: [],
-        loading: false,
-        error: null
-      })
+  // 실시간 구독 설정 (별도 useEffect)
+  useEffect(() => {
+    if (!user) return
+
+    console.log('Setting up real-time subscription for quests')
+
+    const subscription = supabase
+      .channel(`quests-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'quests',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Real-time quest update:', payload)
+          
+          // 실시간 업데이트 시 전체 목록 새로고침
+          fetchQuests()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      console.log('Unsubscribing from quest real-time updates')
+      subscription.unsubscribe()
     }
-    // fetchQuests는 user에 의존하므로 의존성 배열에서 제외
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
+  }, [user, fetchQuests])
 
   // 필터링된 퀘스트들
   const activeQuests = state.quests.filter(quest => quest.status === 'active')
