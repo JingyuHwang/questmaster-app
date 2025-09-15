@@ -111,8 +111,8 @@ export const useAuth = () => {
           if (session?.user) {
             let profile = await getUserProfile(session.user.id)
             
-            // 프로필이 없으면 생성 (회원가입 시에만)
-            if (!profile && event === 'SIGNED_UP') {
+            // 프로필이 없으면 생성 (새 사용자인 경우)
+            if (!profile) {
               profile = await createUserProfile(
                 session.user.id,
                 session.user.email || '',
