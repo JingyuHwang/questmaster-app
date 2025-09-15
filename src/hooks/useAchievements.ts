@@ -154,11 +154,45 @@ export const useAchievements = () => {
         // 100% 진행도 달성하고 아직 언락되지 않은 업적
         if (progress >= 100) {
           console.log(`🏆 Achievement ready to unlock: ${achievement.title} (${progress}%)`)
-          newlyUnlocked.push(achievement)
+          
+          try {
+            // 데이터베이스에 업적 달성 저장
+            const { data, error } = await supabase.rpc('unlock_achievement', {
+              p_user_id: user.id,
+              p_achievement_id: achievement.id,
+              p_progress: 100
+            })
+            
+            if (error) {
+              // 409 에러나 중복 에러는 무시
+              if (error.message?.includes('duplicate') || error.message?.includes('already')) {
+                console.log(`Achievement ${achievement.id} already exists - ignored`)
+                continue
+              }
+              throw error
+            }
+            
+            if (data?.success) {
+              newlyUnlocked.push(achievement)
+              console.log(`✨ Achievement unlocked and saved: ${achievement.title}`)
+            }
+          } catch (saveError: any) {
+            console.error(`Failed to save achievement ${achievement.id}:`, saveError)
+            // 저장 실패해도 알림은 표시 (사용자 경험 우선)
+            newlyUnlocked.push(achievement)
+          }
         }
       }
       
-      console.log(`✅ Achievement check complete: ${newlyUnlocked.length} ready to unlock`)
+      console.log(`✅ Achievement check complete: ${newlyUnlocked.length} newly unlocked`)
+      
+      // 새로 달성한 업적이 있으면 데이터 새로고침
+      if (newlyUnlocked.length > 0) {
+        setTimeout(() => {
+          fetchUserAchievements()
+        }, 1000) // 1초 후 새로고침
+      }
+      
       return newlyUnlocked
       
     } catch (error: any) {
