@@ -1,5 +1,5 @@
 // 업적 관련 상수 데이터
-import type { AvatarRarity } from '../types'
+import type { AvatarRarity, Achievement } from '../types'
 
 export type AchievementCategory = 'quest' | 'habit' | 'level' | 'ability' | 'streak' | 'special'
 
@@ -30,7 +30,7 @@ export const ACHIEVEMENT_RARITY_NAMES: Record<AvatarRarity, string> = {
 }
 
 // 기본 업적 데이터
-export const getDefaultAchievements = () => [
+export const getDefaultAchievements = (): Achievement[] => [
   // 퀘스트 관련 업적
   {
     id: 'first_quest',

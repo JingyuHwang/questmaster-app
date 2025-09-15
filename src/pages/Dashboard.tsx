@@ -39,41 +39,38 @@ export const Dashboard: React.FC = () => {
     checkAllAchievements
   } = useAchievements()
 
-  // 업적 체크 (첫 로드 시에만) - 임시 비활성화
+  // 업적 체크 (안전한 재활성화)
   useEffect(() => {
-    console.log('업적 체크 useEffect - 임시로 비활성화됨')
-    // 임시로 주석 처리하여 409 에러 원인 확인
-    /*
+    // 모든 데이터 로딩이 완료되고 사용자 정보가 있을 때만 실행
     if (profile && !questsLoading && !habitsLoading && !achievementsLoading) {
-      let hasChecked = false // 중복 실행 방지
+      console.log('🎯 업적 체크 시스템 활성화')
       
-      const checkAchievements = async () => {
-        if (hasChecked) return
-        hasChecked = true
-        
+      // 5초 지연 후 업적 체크 (안정성을 위해)
+      const timeoutId = setTimeout(async () => {
         try {
           const newAchievements = await checkAllAchievements()
+          
           if (newAchievements.length > 0) {
-            // 업적 하나씩 순차적으로 토스트 표시
-            for (const achievement of newAchievements) {
+            console.log(`🎉 ${newAchievements.length}개의 새로운 업적 달성!`)
+            
+            // 업적 토스트 알림 (순차적으로 표시)
+            newAchievements.forEach((achievement, index) => {
               setTimeout(() => {
                 showSuccess(
                   `🏆 업적 달성!`,
                   `"${achievement.title}" 업적을 달성했습니다! +${achievement.reward_exp} XP`
                 )
-              }, 100) // 100ms 간격으로 표시
-            }
+              }, index * 500) // 0.5초 간격으로 표시
+            })
           }
         } catch (error) {
           console.error('업적 체크 중 오류:', error)
+          // 에러가 발생해도 앱은 정상 작동
         }
-      }
+      }, 5000) // 5초 지연
       
-      // 2초 지연 후 체크 (초기 로딩 완료 후)
-      const timeoutId = setTimeout(checkAchievements, 2000)
       return () => clearTimeout(timeoutId)
     }
-    */
   }, [profile, questsLoading, habitsLoading, achievementsLoading, checkAllAchievements, showSuccess])
 
   // 퀘스트 완료 핸들러 (토스트 알림 포함)

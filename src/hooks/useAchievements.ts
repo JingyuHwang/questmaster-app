@@ -1,92 +1,23 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
+import { getDefaultAchievements } from '@/lib/achievements/achievementData'
 import type { Achievement, UserAchievement } from '@/lib/types'
-
-// 기본 업적 데이터
-const ACHIEVEMENTS: Achievement[] = [
-  {
-    id: 'first_quest',
-    title: '첫 걸음',
-    description: '첫 번째 퀘스트를 완료하세요',
-    icon: '🏃',
-    category: 'quest',
-    condition_type: 'quest_count',
-    condition_value: 1,
-    reward_exp: 50,
-    rarity: 'common',
-    unlock_message: '모험의 첫 걸음을 내딛었습니다!',
-    hidden: false
-  },
-  {
-    id: 'quest_master',
-    title: '퀘스트 마스터',
-    description: '10개의 퀘스트를 완료하세요',
-    icon: '⚔️',
-    category: 'quest',
-    condition_type: 'quest_count',
-    condition_value: 10,
-    reward_exp: 200,
-    rarity: 'rare',
-    unlock_message: '진정한 퀘스트 마스터가 되었습니다!',
-    hidden: false
-  },
-  {
-    id: 'habit_starter',
-    title: '습관의 시작',
-    description: '첫 번째 습관을 완료하세요',
-    icon: '✅',
-    category: 'habit',
-    condition_type: 'habit_complete',
-    condition_value: 1,
-    reward_exp: 30,
-    rarity: 'common',
-    unlock_message: '좋은 습관의 시작입니다!',
-    hidden: false
-  },
-  {
-    id: 'level_up',
-    title: '성장의 증거',
-    description: '레벨 5에 도달하세요',
-    icon: '⬆️',
-    category: 'level',
-    condition_type: 'level',
-    condition_value: 5,
-    reward_exp: 100,
-    rarity: 'rare',
-    unlock_message: '꾸준한 노력의 결과입니다!',
-    hidden: false
-  },
-  {
-    id: 'streak_week',
-    title: '일주일 연속',
-    description: '7일 연속 활동하세요',
-    icon: '🔥',
-    category: 'streak',
-    condition_type: 'max_streak',
-    condition_value: 7,
-    reward_exp: 150,
-    rarity: 'epic',
-    unlock_message: '놀라운 지속력을 보여주었습니다!',
-    hidden: false
-  }
-]
-
-interface AchievementProgress {
-  achievement: Achievement
-  progress: number
-  isCompleted: boolean
-  progressText: string
-}
 
 export const useAchievements = () => {
   const { user, profile } = useAuth()
   const [userAchievements, setUserAchievements] = useState<UserAchievement[]>([])
   const [questStats, setQuestStats] = useState({ completed: 0, total: 0 })
-  const [habitStats, setHabitStats] = useState({ completed: 0, total: 0 })
+  const [habitStats, setHabitStats] = useState({ completed: 0, total: 0, maxStreak: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isCheckingAchievements, setIsCheckingAchievements] = useState(false) // 업적 체크 중 방지
+  
+  // 중복 실행 방지를 위한 ref들
+  const isCheckingRef = useRef(false)
+  const lastCheckTimeRef = useRef<number>(0)
+  const checkTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  const achievements = getDefaultAchievements()
 
   // 사용자 업적 및 통계 로드
   const fetchUserAchievements = async () => {
@@ -94,6 +25,7 @@ export const useAchievements = () => {
 
     try {
       setLoading(true)
+      setError(null)
       
       // 사용자 업적 로드
       const { data: achievementData, error: achievementError } = await supabase
@@ -101,8 +33,12 @@ export const useAchievements = () => {
         .select('*')
         .eq('user_id', user.id)
 
-      if (achievementError) throw achievementError
-      setUserAchievements(achievementData || [])
+      if (achievementError) {
+        console.warn('User achievements fetch error:', achievementError)
+        setUserAchievements([])
+      } else {
+        setUserAchievements(achievementData || [])
+      }
       
       // 퀘스트 통계 로드
       const { data: questData, error: questError } = await supabase
@@ -110,26 +46,34 @@ export const useAchievements = () => {
         .select('status')
         .eq('user_id', user.id)
         
-      if (questError) throw questError
+      if (questError) {
+        console.warn('Quest stats fetch error:', questError)
+        setQuestStats({ completed: 0, total: 0 })
+      } else {
+        const completedQuests = questData?.filter(q => q.status === 'completed').length || 0
+        const totalQuests = questData?.length || 0
+        setQuestStats({ completed: completedQuests, total: totalQuests })
+      }
       
-      const completedQuests = questData?.filter(q => q.status === 'completed').length || 0
-      const totalQuests = questData?.length || 0
-      setQuestStats({ completed: completedQuests, total: totalQuests })
-      
-      // 습관 통계 로드 (완료된 습관 체크인 수)
+      // 습관 통계 로드
       const { data: habitData, error: habitError } = await supabase
         .from('habits')
         .select('streak_count')
         .eq('user_id', user.id)
         .eq('is_active', true)
         
-      if (habitError) throw habitError
-      
-      const totalHabitCompletes = habitData?.reduce((sum, h) => sum + h.streak_count, 0) || 0
-      const totalHabits = habitData?.length || 0
-      setHabitStats({ completed: totalHabitCompletes, total: totalHabits })
+      if (habitError) {
+        console.warn('Habit stats fetch error:', habitError)
+        setHabitStats({ completed: 0, total: 0, maxStreak: 0 })
+      } else {
+        const totalHabitCompletes = habitData?.reduce((sum, h) => sum + h.streak_count, 0) || 0
+        const totalHabits = habitData?.length || 0
+        const maxStreak = Math.max(...(habitData?.map(h => h.streak_count) || [0]), 0)
+        setHabitStats({ completed: totalHabitCompletes, total: totalHabits, maxStreak })
+      }
       
     } catch (err: any) {
+      console.error('Achievement fetch error:', err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -137,83 +81,100 @@ export const useAchievements = () => {
   }
 
   // 업적 진행도 계산
-  const calculateProgress = (achievement: Achievement): number => {
+  const calculateProgress = useCallback((achievement: Achievement): number => {
     if (!profile) return 0
 
-    switch (achievement.condition_type) {
-      case 'quest_count':
-        return Math.min(100, (questStats.completed / achievement.condition_value) * 100)
-        
-      case 'habit_complete':
-        return Math.min(100, (habitStats.completed / achievement.condition_value) * 100)
-        
-      case 'level':
-        return Math.min(100, (profile.level / achievement.condition_value) * 100)
-        
-      case 'ability':
-        if (achievement.ability_type) {
-          const abilityValue = profile[achievement.ability_type as keyof typeof profile] as number
-          return Math.min(100, (abilityValue / achievement.condition_value) * 100)
-        }
-        return 0
-        
-      case 'max_streak':
-        // 최대 스트릭 계산 (현재 모든 습관의 최대 스트릭)
-        const maxStreak = Math.max(...(habitStats.total > 0 ? [profile.level] : [0])) // 임시로 레벨 사용
-        return Math.min(100, (maxStreak / achievement.condition_value) * 100)
-        
-      default:
-        return 0
+    try {
+      switch (achievement.condition_type) {
+        case 'quest_count':
+          return Math.min(100, Math.floor((questStats.completed / achievement.condition_value) * 100))
+          
+        case 'habit_complete':
+          return Math.min(100, Math.floor((habitStats.completed / achievement.condition_value) * 100))
+          
+        case 'level':
+          return Math.min(100, Math.floor((profile.level / achievement.condition_value) * 100))
+          
+        case 'ability':
+          if (achievement.ability_type) {
+            const abilityValue = profile[achievement.ability_type as keyof typeof profile] as number
+            return Math.min(100, Math.floor((abilityValue / achievement.condition_value) * 100))
+          }
+          return 0
+          
+        case 'max_streak':
+          return Math.min(100, Math.floor((habitStats.maxStreak / achievement.condition_value) * 100))
+          
+        default:
+          return 0
+      }
+    } catch (error) {
+      console.warn(`Progress calculation error for ${achievement.id}:`, error)
+      return 0
     }
-  }
+  }, [profile, questStats, habitStats])
 
-  // 업적 언락 체크 (RPC 함수 사용) - 완전 비활성화
-  const checkAchievementUnlock = async (achievement: Achievement): Promise<boolean> => {
-    console.log(`업적 체크 비활성화됨: ${achievement.id}`)
-    return false // 임시로 모든 업적 체크 비활성화
-  }
-
-  // 모든 업적 체크 (순차 실행으로 중복 방지)
+  // 모든 업적 체크 (안전한 버전)
   const checkAllAchievements = async (): Promise<Achievement[]> => {
-    // 이미 체크 중이면 뺈 배열 반환
-    if (isCheckingAchievements) {
-      console.log('업적 체크가 이미 진행 중 - 스킨')
+    // 중복 실행 방지
+    if (isCheckingRef.current) {
+      console.log('Achievement check already in progress - skipping')
       return []
     }
 
-    setIsCheckingAchievements(true)
+    // 너무 빈번한 체크 방지 (10초 쿨다운)
+    const now = Date.now()
+    if (now - lastCheckTimeRef.current < 10000) {
+      console.log('Achievement check too frequent - skipping')
+      return []
+    }
+
+    if (!user || !profile) {
+      console.log('No user or profile - skipping achievement check')
+      return []
+    }
+
+    isCheckingRef.current = true
+    lastCheckTimeRef.current = now
     const newlyUnlocked: Achievement[] = []
     
     try {
-      console.log('업적 전체 체크 시작')
+      console.log('🔍 Starting safe achievement check...')
       
-      // 동시 실행 방지를 위해 순차적으로 처리
-      for (const achievement of ACHIEVEMENTS) {
-        try {
-          const unlocked = await checkAchievementUnlock(achievement)
-          if (unlocked) {
-            newlyUnlocked.push(achievement)
-            console.log(`새 업적 언락: ${achievement.title}`)
-          }
-        } catch (error) {
-          console.error(`업적 ${achievement.id} 체크 중 오류:`, error)
-          // 개별 업적 오류는 무시하고 계속 진행
-          continue
+      // 시뮬레이션: 실제 조건을 체크하여 새로 언락될 업적 찾기
+      for (const achievement of achievements) {
+        const progress = calculateProgress(achievement)
+        const existingAchievement = userAchievements.find(ua => 
+          ua.achievement_id === achievement.id && ua.is_completed
+        )
+        
+        // 이미 완료된 업적은 스킵
+        if (existingAchievement) continue
+        
+        // 100% 진행도 달성하고 아직 언락되지 않은 업적
+        if (progress >= 100) {
+          console.log(`🏆 Achievement ready to unlock: ${achievement.title} (${progress}%)`)
+          newlyUnlocked.push(achievement)
         }
       }
       
-      console.log(`업적 체크 완료: ${newlyUnlocked.length}개 새로 언락`)
+      console.log(`✅ Achievement check complete: ${newlyUnlocked.length} ready to unlock`)
       return newlyUnlocked
+      
+    } catch (error: any) {
+      console.error('Achievement check failed:', error)
+      return []
     } finally {
-      setIsCheckingAchievements(false)
+      isCheckingRef.current = false
     }
   }
 
   // 업적 진행도 정보
-  const getAchievementProgress = (): AchievementProgress[] => {
-    return ACHIEVEMENTS.map(achievement => {
+  const getAchievementProgress = useCallback(() => {
+    return achievements.map(achievement => {
       const userAchievement = userAchievements.find(ua => ua.achievement_id === achievement.id)
-      const progress = userAchievement?.progress || calculateProgress(achievement)
+      const calculatedProgress = calculateProgress(achievement)
+      const progress = userAchievement?.progress || calculatedProgress
       const isCompleted = userAchievement?.is_completed || false
       
       let progressText = ''
@@ -231,8 +192,15 @@ export const useAchievements = () => {
             progressText = `레벨 ${profile?.level || 0}/${achievement.condition_value}`
             break
           case 'max_streak':
-            const currentStreak = Math.floor((progress / 100) * achievement.condition_value)
-            progressText = `${currentStreak}/${achievement.condition_value}일 연속`
+            progressText = `${habitStats.maxStreak}/${achievement.condition_value}일 연속`
+            break
+          case 'ability':
+            if (achievement.ability_type && profile) {
+              const currentValue = profile[achievement.ability_type as keyof typeof profile] as number
+              progressText = `${currentValue}/${achievement.condition_value}`
+            } else {
+              progressText = `${Math.floor(progress)}%`
+            }
             break
           default:
             progressText = `${Math.floor(progress)}%`
@@ -246,37 +214,48 @@ export const useAchievements = () => {
         progressText
       }
     })
-  }
+  }, [achievements, userAchievements, calculateProgress, questStats, habitStats, profile])
 
   // 최근 달성한 업적들
-  const getRecentAchievements = (limit: number = 5): Achievement[] => {
+  const getRecentAchievements = useCallback((limit: number = 5): Achievement[] => {
     const recentUserAchievements = userAchievements
       .filter(ua => ua.is_completed && ua.unlocked_at)
       .sort((a, b) => new Date(b.unlocked_at!).getTime() - new Date(a.unlocked_at!).getTime())
       .slice(0, limit)
     
     return recentUserAchievements
-      .map(ua => ACHIEVEMENTS.find(a => a.id === ua.achievement_id))
+      .map(ua => achievements.find(a => a.id === ua.achievement_id))
       .filter((a): a is Achievement => a !== undefined)
-  }
+  }, [userAchievements, achievements])
 
   // 완료된 업적 수
-  const getCompletedCount = (): number => {
+  const getCompletedCount = useCallback((): number => {
     return userAchievements.filter(ua => ua.is_completed).length
-  }
+  }, [userAchievements])
 
   // 완료율
-  const getCompletionRate = (): number => {
-    return ACHIEVEMENTS.length > 0 ? (getCompletedCount() / ACHIEVEMENTS.length) * 100 : 0
-  }
+  const getCompletionRate = useCallback((): number => {
+    return achievements.length > 0 ? (getCompletedCount() / achievements.length) * 100 : 0
+  }, [achievements.length, getCompletedCount])
 
+  // 컴포넌트 언마운트 시 정리
+  useEffect(() => {
+    return () => {
+      if (checkTimeoutRef.current) {
+        clearTimeout(checkTimeoutRef.current)
+      }
+      isCheckingRef.current = false
+    }
+  }, [])
+
+  // 사용자 변경 시 데이터 로드
   useEffect(() => {
     if (user) {
       fetchUserAchievements()
     } else {
       setUserAchievements([])
       setQuestStats({ completed: 0, total: 0 })
-      setHabitStats({ completed: 0, total: 0 })
+      setHabitStats({ completed: 0, total: 0, maxStreak: 0 })
       setLoading(false)
       setError(null)
     }
@@ -284,7 +263,7 @@ export const useAchievements = () => {
 
   return {
     // 상태
-    achievements: ACHIEVEMENTS,
+    achievements,
     userAchievements,
     loading,
     error,
@@ -295,9 +274,12 @@ export const useAchievements = () => {
     completedCount: getCompletedCount(),
     completionRate: getCompletionRate(),
     
+    // 통계
+    questStats,
+    habitStats,
+    
     // 액션
     checkAllAchievements,
-    checkAchievementUnlock,
     refetch: fetchUserAchievements
   }
 }
